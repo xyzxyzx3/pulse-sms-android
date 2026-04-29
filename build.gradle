@@ -6,55 +6,54 @@
  * You may obtain a copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 
-def propsFile = project.file('keystore.properties')
 def props = new Properties()
-props.load(new FileInputStream(propsFile))
+def propsFile = project.file('keystore.properties')
 
-propsFile = rootProject.file('api_keys.properties')
+if (propsFile.exists()) {
+    props.load(new FileInputStream(propsFile))
+}
+
 def apiKeys = new Properties()
-apiKeys.load(new FileInputStream(propsFile))
+def apiFile = rootProject.file('api_keys.properties')
+
+if (apiFile.exists()) {
+    apiKeys.load(new FileInputStream(apiFile))
+}
 
 buildscript {
 
     ext.buildInfo = [
-            'id'                : 'xyz.klinker.messenger',
-            'name'              : '5.4.6',
-            'number'            : System.getenv("BUILD_NUMBER") as Integer ?: 135,
+            'id'   : 'xyz.klinker.messenger',
+            'name' : '5.4.6',
+            'number': System.getenv("BUILD_NUMBER") as Integer ?: 135,
     ]
 
     ext.versions = [
-            'gradlePlugin'      : '4.1.0',
-            'targetSdk'         : 30,
-            'minSdk'            : 21,
+            'gradlePlugin'     : '4.1.0',
+            'targetSdk'        : 30,
+            'minSdk'           : 21,
+            'kotlin'           : '1.4.10',
 
-            'kotlin'            : '1.4.10',
+            'playServices'     : '17.0.0',
+            'glide'            : '4.11.0',
+            'retrofit'         : '2.7.2',
 
-            'playServices'      : '17.0.0',
-            'glide'             : '4.11.0',
-            'retrofit'          : '2.7.2',
+            'androidX'         : '1.0.0',
+            'androidXExif'     : '1.2.0',
+            'androidXTester'   : '1.1.0',
+            'androidXEspresso' : '3.1.0',
 
-            'androidX'          : '1.0.0',
-            'androidXExif'      : '1.2.0',
-            'androidXTester'    : '1.1.0',
-            'androidXEspresso'  : '3.1.0',
+            'firebaseAnalytics': '17.4.4',
+            'firebaseMessaging': '20.2.0',
+            'firebaseStorage'  : '19.1.1',
+            'firebaseAuth'     : '19.3.2',
 
-            'firebaseAnalytics' : '17.4.4',
-            'firebaseMessaging' : '20.2.0',
-            'firebaseStorage'   : '19.1.1',
-            'firebaseAuth'      : '19.3.2',
-
-            'mockito'           : '3.5.13',
-            'robolectric'       : '4.4',
-            'testEspresso'      : '3.0.1',
-            'testRunner'        : '1.0.1',
+            'mockito'          : '3.5.13',
+            'robolectric'      : '4.4',
+            'testEspresso'     : '3.0.1',
+            'testRunner'       : '1.0.1',
     ]
 
     repositories {
@@ -69,7 +68,6 @@ buildscript {
         classpath 'com.google.gms:google-services:4.3.4'
         classpath 'com.google.firebase:firebase-crashlytics-gradle:2.3.0'
     }
-
 }
 
 allprojects {
@@ -80,28 +78,11 @@ allprojects {
         mavenCentral()
         maven { url "https://jitpack.io" }
         maven { url "https://dl.bintray.com/drummer-aidan/maven" }
-        maven { url "https://dl.bintray.com/sensor-tower/android-usage" }
-        maven { url "https://dl.bintray.com/mockito/maven" }
-        maven { url 'https://oss.sonatype.org/content/repositories/snapshots/' }
+        maven { url "https://oss.sonatype.org/content/repositories/snapshots/" }
         flatDir { dirs "$rootProject.projectDir/shared/libs" }
     }
-
-    configurations.all {
-        resolutionStrategy.eachDependency { DependencyResolveDetails details ->
-            def requested = details.requested
-//            if (requested.group == 'com.google.android.gms' && requested.name == 'play-services-basement') {
-//                details.useVersion '16.1.0'
-//            } else if (requested.group == 'com.google.android.gms' && requested.name == 'play-services-tasks') {
-//                details.useVersion '16.0.1'
-//            } else if (requested.group == 'com.google.android.gms' && requested.name == 'play-services-base') {
-//                details.useVersion '16.0.1'
-//            }
-        }
-    }
-
 }
 
-// add the common project properties, to each app variant
 subprojects {
     afterEvaluate { project ->
         if (project.hasProperty("android")) {
@@ -112,14 +93,19 @@ subprojects {
                 defaultConfig {
                     targetSdkVersion versions.targetSdk
 
-                    buildConfigField("String", "GIPHY_API_KEY", "\"${apiKeys['GIPHY']}\"")
-                    buildConfigField("String", "ARTICLE_API_KEY", "\"${apiKeys['ARTICLE']}\"")
-                    buildConfigField("String", "YOUTUBE_API_KEY", "\"${apiKeys['YOUTUBE']}\"")
-
                     vectorDrawables.useSupportLibrary = true
                     multiDexEnabled true
 
                     testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+                    buildConfigField("String", "GIPHY_API_KEY",
+                            "\"${apiKeys.getProperty('GIPHY', '')}\"")
+
+                    buildConfigField("String", "ARTICLE_API_KEY",
+                            "\"${apiKeys.getProperty('ARTICLE', '')}\"")
+
+                    buildConfigField("String", "YOUTUBE_API_KEY",
+                            "\"${apiKeys.getProperty('YOUTUBE', '')}\"")
                 }
 
                 signingConfigs {
@@ -129,11 +115,14 @@ subprojects {
                         keyAlias "androiddebugkey"
                         keyPassword "android"
                     }
+
                     release {
-                        storeFile file(props['keystorefile'])
-                        storePassword props['keystorepassword']
-                        keyAlias props['keyalias']
-                        keyPassword props['keypassword']
+                        if (propsFile.exists()) {
+                            storeFile file(props['keystorefile'])
+                            storePassword props['keystorepassword']
+                            keyAlias props['keyalias']
+                            keyPassword props['keypassword']
+                        }
                     }
                 }
 
@@ -141,53 +130,11 @@ subprojects {
                     debug {
                         versionNameSuffix "-DEBUG"
                         signingConfig signingConfigs.debug
-
-                        matchingFallbacks = ['release_fast', 'release']
                     }
-                    staging {
-                        versionNameSuffix "-STAGING"
-                        debuggable true
-                        signingConfig signingConfigs.debug
 
-                        matchingFallbacks = ['release_fast', 'release']
-                    }
-                    release_fast {
-                        versionNameSuffix "-RELEASE"
-                        minifyEnabled false
-                        shrinkResources false
-                        debuggable true
-                        signingConfig signingConfigs.release
-
-                        matchingFallbacks = ['release_fast', 'release']
-                    }
                     release {
                         signingConfig signingConfigs.release
-                        matchingFallbacks = ['release_fast', 'release']
                     }
-                }
-
-                aaptOptions {
-                    noCompress "tflite"
-                }
-
-                dexOptions {
-                    jumboMode = true
-                    javaMaxHeapSize "4g"
-                }
-
-                lintOptions {
-                    checkReleaseBuilds false
-                    abortOnError true
-                    disable 'GoogleAppIndexingWarning', 'AllowBackup', 'IconMissingDensityFolder',
-                            'InconsistentLayout', 'InvalidPackage', 'TrustAllX509TrustManager',
-                            'UnusedResources', 'StaticFieldLeak', 'NestedWeights', 'InflateParams',
-                            'MissingTranslation', 'GradleCompatible', 'ApplySharedPref', 'Assert',
-                            'LocaleFolder', 'TypographyEllipsis', 'InconsistentArrays', 'DefaultLocale',
-                            'AppCompatCustomView', 'UnusedQuantity', 'MergeRootFrame', 'NewApi', 'Typos',
-                            'IconDensities', 'IconDuplicates', 'ContentDescription', 'LabelFor'
-                    textOutput 'stdout'
-                    xmlReport false
-                    htmlReport true
                 }
 
                 compileOptions {
@@ -195,26 +142,12 @@ subprojects {
                     targetCompatibility JavaVersion.VERSION_1_8
                 }
 
-                testOptions {
-                    unitTests {
-                        includeAndroidResources = true
-                    }
-                }
-
                 packagingOptions {
                     exclude 'META-INF/DEPENDENCIES'
                     exclude 'META-INF/LICENSE'
-                    exclude 'META-INF/LICENSE.txt'
-                    exclude 'META-INF/license.txt'
                     exclude 'META-INF/NOTICE'
-                    exclude 'META-INF/NOTICE.txt'
-                    exclude 'META-INF/notice.txt'
-                    exclude 'META-INF/ASL2.0'
-                    exclude 'META-INF/library_release.kotlin_module'
                 }
-
             }
         }
-
     }
 }
